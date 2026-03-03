@@ -2,7 +2,7 @@ name: JustRunMy 自动续期
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 */2 * *'   # 每天北京时间 09:00（UTC 01:00）
+    - cron: '0 1 */2 * *'
 jobs:
   renew:
     runs-on: ubuntu-latest
@@ -18,25 +18,25 @@ jobs:
         with:
           python-version: '3.11'
           
-      - name: 🛡️ 启动 Gost 代理转发
-        # 从 Secrets 读取代理配置，防止 IP 和密码泄露
+      - name: 🛡️ 启动 Gost 代理转发 (可选)
         env:
           GOST_PROXY_TARGET: ${{ secrets.GOST_PROXY_TARGET }}
         run: |
           if [ -z "$GOST_PROXY_TARGET" ]; then
-            echo "❌ 错误: 未设置 GOST_PROXY_TARGET secret"
-            exit 1
+            echo "ℹ️ 未配置 GOST_PROXY_TARGET，将使用 GitHub Actions 本地网络直连。"
+            echo "USE_PROXY=false" >> $GITHUB_ENV
+          else
+            wget -q https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz
+            gunzip gost-linux-amd64-2.11.5.gz
+            chmod +x gost-linux-amd64-2.11.5
+            mv gost-linux-amd64-2.11.5 gost
+            echo "启动 Gost 转发隧道..."
+            nohup ./gost -L http://:8080 -F $GOST_PROXY_TARGET > gost.log 2>&1 &
+            sleep 3
+            echo "测试本地代理连通性..."
+            curl -x http://127.0.0.1:8080 https://api.ipify.org -v
+            echo "USE_PROXY=true" >> $GITHUB_ENV
           fi
-          wget -q https://github.com/ginuerzh/gost/releases/download/v2.11.5/gost-linux-amd64-2.11.5.gz
-          gunzip gost-linux-amd64-2.11.5.gz
-          chmod +x gost-linux-amd64-2.11.5
-          mv gost-linux-amd64-2.11.5 gost
-          echo "启动 Gost 转发隧道..."
-          # 使用环境变量替换硬编码的 proxy url
-          nohup ./gost -L http://:8080 -F $GOST_PROXY_TARGET > gost.log 2>&1 &
-          sleep 3
-          echo "测试本地代理连通性..."
-          curl -x http://127.0.0.1:8080 https://api.ipify.org -v
           
       - name: 🛠️ 安装系统依赖
         run: |
@@ -54,7 +54,6 @@ jobs:
           seleniumbase install chromedriver
           
       - name: 🚀 运行续期脚本
-        # 从 Secrets 将账号密码传递给 Python 脚本的环境变量
         env:
           JUSTRUNMY_EMAIL: ${{ secrets.JUSTRUNMY_EMAIL }}
           JUSTRUNMY_PASSWORD: ${{ secrets.JUSTRUNMY_PASSWORD }}
